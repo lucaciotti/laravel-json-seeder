@@ -12,10 +12,17 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use TimoKoerber\LaravelJsonSeeder\Utils\SeederResult;
 use TimoKoerber\LaravelJsonSeeder\Utils\SeederResultTable;
+use JsonMachine\JsonMachine;
+use JsonMachine\JsonDecoder\DecodingError;
+use JsonMachine\JsonDecoder\ErrorWrappingDecoder;
+use JsonMachine\JsonDecoder\ExtJsonDecoder;
 
 class JsonDatabaseSeeder extends Seeder
 {
     protected $tableName;
+    protected $configUseUpsert;
+    protected $configDisableForeignKeyConstrain;
+    protected $configIgnoreEmptyValues;
 
     /**
      * @var SeederResultTable
@@ -29,6 +36,10 @@ class JsonDatabaseSeeder extends Seeder
 
         $seedsDirectory = config('jsonseeder.directory', '/database/json');
         $absoluteSeedsDirectory = base_path($seedsDirectory);
+
+        $this->configUseUpsert = config('jsonseeder.json-seed.use-upsert', true);
+        $this->configDisableForeignKeyConstrain = config('jsonseeder.json-seed.disable-foreignKey-constraints', true);
+        $this->configIgnoreEmptyValues = config('jsonseeder.json-seed.ignore-empty-values', true);
 
         if (! File::isDirectory($absoluteSeedsDirectory)) {
             $this->command->error('The directory '.$seedsDirectory.' was not found.');
@@ -57,7 +68,7 @@ class JsonDatabaseSeeder extends Seeder
 
     public function seed(array $jsonFiles)
     {
-        Schema::disableForeignKeyConstraints();
+        if($this->configDisableForeignKeyConstrain) Schema::disableForeignKeyConstraints();
 
         foreach ($jsonFiles as $jsonFile) {
             $SeederResult = new SeederResult();
@@ -82,32 +93,52 @@ class JsonDatabaseSeeder extends Seeder
 
             $SeederResult->setTableStatus(SeederResult::TABLE_STATUS_EXISTS);
 
-            $filepath = $jsonFile->getRealPath();
-            $content = File::get($filepath);
-            $jsonArray = $this->getValidJsonString($content, $SeederResult);
-
-            // empty array is a valid result, check for null
-            if ($jsonArray === null) {
-                continue;
-            }
-
-            DB::table($tableName)->truncate();
-
-            if (empty($jsonArray)) {
-                $this->outputWarning(SeederResult::ERROR_NO_ROWS);
-                $SeederResult->setError(SeederResult::ERROR_NO_ROWS);
-
-                continue;
-            }
-
+            // move this here cause the forEach starts before with the "halaxa/json-machine"
             $tableColumns = DB::getSchemaBuilder()->getColumnListing($tableName);
 
-            foreach ($jsonArray as $data) {
-                $this->compareJsonWithTableColumns($data, $tableColumns, $SeederResult);
-                $data = Arr::only($data, $tableColumns);
+            $filepath = $jsonFile->getRealPath();
+            $content = File::get($filepath);
+            $fileSize = filesize($filepath);
+
+            // this often causes Allowed Memory Size Exhausted caused by inefficient iteration of big JSON files
+            // $jsonArray = $this->getValidJsonString($content, $SeederResult);
+            if (empty($content)) {
+                $this->outputError(SeederResult::ERROR_FILE_EMPTY);
+                $SeederResult->setError(SeederResult::ERROR_FILE_EMPTY);
+                $SeederResult->setStatusAborted();
+
+                return null;
+            }
+
+
+            if (!$this->configUseUpsert) DB::table($tableName)->truncate();
+
+            $bar = $this->command->createProgressBar($fileSize);
+            $bar->start();
+
+            // we will use the "halaxa/json-machine" method --> https://github.com/halaxa/json-machine
+            $jsonRows = JsonMachine::fromFile($content, '', new ErrorWrappingDecoder(new ExtJsonDecoder()));
+            foreach ($jsonRows as $key => $item) {
+                if ($key instanceof DecodingError || $item instanceof DecodingError) {
+                    $this->outputError(SeederResult::ERROR_SYNTAX_INVALID);
+                    $SeederResult->setError(SeederResult::ERROR_SYNTAX_INVALID);
+                    $SeederResult->setStatusAborted();
+
+                    return null;
+                }
+                $bar->advance();
+                // $this->outputInfo('Progress : ' . intval($jsonRows->getPosition() / $fileSize * 100) . ' %');
+                $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
+                $data = Arr::only($item, $tableColumns);
+
+                if ($this->configIgnoreEmptyValues) $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
 
                 try {
-                    DB::table($tableName)->insert($data);
+                    if ($this->configUseUpsert) {
+                        DB::table($tableName)->upsert($data, '');
+                    } else {
+                        DB::table($tableName)->insert($data);
+                    }
                     $SeederResult->addRow();
                     $SeederResult->setStatusSucceeded();
                 } catch (\Exception $e) {
@@ -117,12 +148,13 @@ class JsonDatabaseSeeder extends Seeder
                     Log::warning($e->getMessage());
                     break;
                 }
-            }
 
+            }
+            $bar->finish();
             $this->outputInfo('Seeding successful!');
         }
 
-        Schema::enableForeignKeyConstraints();
+        if ($this->configDisableForeignKeyConstrain) Schema::enableForeignKeyConstraints();
 
         $this->command->line('');
         $this->command->table($this->SeederResultTable->getHeader(), $this->SeederResultTable->getResult());
@@ -152,31 +184,6 @@ class JsonDatabaseSeeder extends Seeder
         if ($diff) {
             $SeederResult->setError(SeederResult::ERROR_FIELDS_UNKNOWN.' '.implode(',', $diff));
         }
-    }
-
-    protected function getValidJsonString($content, SeederResult $SeederResult)
-    {
-        if (empty($content)) {
-            $this->outputError(SeederResult::ERROR_FILE_EMPTY);
-            $SeederResult->setError(SeederResult::ERROR_FILE_EMPTY);
-            $SeederResult->setStatusAborted();
-
-            return null;
-        }
-
-        $jsonContent = json_decode($content, true);
-
-        if (json_last_error()) {
-            $this->outputError(SeederResult::ERROR_SYNTAX_INVALID);
-            $SeederResult->setError(SeederResult::ERROR_SYNTAX_INVALID);
-            $SeederResult->setStatusAborted();
-
-            return null;
-        }
-
-        $SeederResult->setStatusSucceeded();
-
-        return $jsonContent;
     }
 
     protected function outputInfo(string $message)
