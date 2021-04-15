@@ -1,6 +1,6 @@
 <?php
 
-namespace TimoKoerber\LaravelJsonSeeder\Utils;
+namespace LucaCiotti\LaravelJsonSeeder\Utils;
 
 class SeederResultTable
 {

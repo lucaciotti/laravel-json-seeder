@@ -1,5 +1,5 @@
 {
-    "name": "timokoerber/laravel-json-seeder",
+    "name": "lucaciotti/laravel-json-seeder",
     "type": "project",
     "description": "Create and use JSON files to seed your database in your Laravel applications",
     "keywords": [
@@ -12,7 +12,15 @@
     "authors": [
         {
             "name": "Timo Körber",
-            "email": "koerber.timo@gmail.com"
+            "email": "koerber.timo@gmail.com",
+            "homepage": "https://github.com/TimoKoerber/laravel-json-seeder",
+			"role": "Package Creator"
+        },
+        {
+            "name": "Luca Ciotti",
+            "email": "luca.ciotti@gmail.com",
+            "homepage": "https://github.com/lucaciotti/laravel-json-seeder",
+			"role": "Second Developper"
         }
     ],
     "require": {
@@ -28,13 +36,13 @@
     },
     "autoload": {
         "psr-4": {
-            "TimoKoerber\\LaravelJsonSeeder\\": "src/"
+            "LucaCiotti\\LaravelJsonSeeder\\": "src/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "TimoKoerber\\LaravelJsonSeeder\\JsonSeederServiceProvider"
+                "LucaCiotti\\LaravelJsonSeeder\\JsonSeederServiceProvider"
             ]
         }
     },

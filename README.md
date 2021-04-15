@@ -1,5 +1,17 @@
 ![Laravel JSON Seeder](https://user-images.githubusercontent.com/65356688/86782944-fe5aa180-c05f-11ea-9267-1581c7f991e1.jpg)
 
+## INTRO
+
+This is a modified version of the brilliant package created by [TimoKoerber](https://github.com/TimoKoerber/laravel-json-seeder).
+
+In this version I changed the call to "json_decode" in the Seeder side with the package created by [Halaxa](https://github.com/halaxa/json-machine) "json-machine".
+  - "json_decode" often causes Allowed Memory Size Exhausted, when it has to process large files (which can often happen in database seeding).
+  - the "halaxa / json-machine" offers a very easy to use and memory efficient drop-in replacement for inefficient iteration of big JSON files
+
+In addition, I added a few more configurations for the seeding procedure. 
+
+------------------------------------------------------------------------------------------
+
 ## Laravel JSON Seeder
 
 Create and use JSON files to seed your database in your Laravel applications. 
@@ -20,7 +32,7 @@ composer require timokoerber/laravel-json-seeder --dev
 Next you need to **publish** the config file and register the required commands with ...   
 
 ```shell
-php artisan vendor:publish --provider="TimoKoerber\LaravelJsonSeeder\JsonSeederServiceProvider"
+php artisan vendor:publish --provider="LucaCiotti\LaravelJsonSeeder\JsonSeederServiceProvider"
 ```
 
 This will create the file `config/jsonseeder.php` where you can find the configurations.
@@ -33,7 +45,7 @@ Next add the JsonSeederServiceProvider to the `providers` array in `config/app.p
 'providers' => [
     ...
     
-    TimoKoerber\LaravelJsonSeeder\JsonSeederServiceProvider::class,
+    LucaCiotti\LaravelJsonSeeder\JsonSeederServiceProvider::class,
     
     ...
 ]
@@ -83,7 +95,7 @@ class DatabaseSeeder extends Seeder
 {
     public function run()
     {
-        $this->call(TimoKoerber\LaravelJsonSeeder\JsonDatabaseSeeder::class);
+        $this->call(LucaCiotti\LaravelJsonSeeder\JsonDatabaseSeeder::class);
     }
 }
 ```

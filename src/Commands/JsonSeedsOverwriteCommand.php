@@ -1,6 +1,6 @@
 <?php
 
-namespace TimoKoerber\LaravelJsonSeeder\Commands;
+namespace LucaCiotti\LaravelJsonSeeder\Commands;
 
 class JsonSeedsOverwriteCommand extends JsonSeedsCreateCommand
 {

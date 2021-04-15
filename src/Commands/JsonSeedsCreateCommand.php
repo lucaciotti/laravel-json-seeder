@@ -1,6 +1,6 @@
 <?php
 
-namespace TimoKoerber\LaravelJsonSeeder\Commands;
+namespace LucaCiotti\LaravelJsonSeeder\Commands;
 
 use Exception;
 use Illuminate\Console\Command;

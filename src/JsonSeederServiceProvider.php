@@ -1,10 +1,10 @@
 <?php
 
-namespace TimoKoerber\LaravelJsonSeeder;
+namespace LucaCiotti\LaravelJsonSeeder;
 
 use Illuminate\Support\ServiceProvider as IlluminateServiceProvider;
-use TimoKoerber\LaravelJsonSeeder\Commands\JsonSeedsCreateCommand;
-use TimoKoerber\LaravelJsonSeeder\Commands\JsonSeedsOverwriteCommand;
+use LucaCiotti\LaravelJsonSeeder\Commands\JsonSeedsCreateCommand;
+use LucaCiotti\LaravelJsonSeeder\Commands\JsonSeedsOverwriteCommand;
 
 class JsonSeederServiceProvider extends IlluminateServiceProvider
 {

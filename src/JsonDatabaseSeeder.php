@@ -1,6 +1,6 @@
 <?php
 
-namespace TimoKoerber\LaravelJsonSeeder;
+namespace LucaCiotti\LaravelJsonSeeder;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Arr;
@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use TimoKoerber\LaravelJsonSeeder\Utils\SeederResult;
-use TimoKoerber\LaravelJsonSeeder\Utils\SeederResultTable;
+use LucaCiotti\LaravelJsonSeeder\Utils\SeederResult;
+use LucaCiotti\LaravelJsonSeeder\Utils\SeederResultTable;
 use JsonMachine\JsonMachine;
 use JsonMachine\JsonDecoder\DecodingError;
 use JsonMachine\JsonDecoder\ErrorWrappingDecoder;
@@ -32,7 +32,7 @@ class JsonDatabaseSeeder extends Seeder
     public function run()
     {
         $env = App::environment();
-        $this->command->line('<info>Environment:</info> '.$env);
+        $this->command->line('<info>Environment:</info> ' . $env);
 
         $seedsDirectory = config('jsonseeder.directory', '/database/json');
         $absoluteSeedsDirectory = base_path($seedsDirectory);
@@ -41,24 +41,24 @@ class JsonDatabaseSeeder extends Seeder
         $this->configDisableForeignKeyConstrain = config('jsonseeder.json-seed.disable-foreignKey-constraints', true);
         $this->configIgnoreEmptyValues = config('jsonseeder.json-seed.ignore-empty-values', true);
 
-        if (! File::isDirectory($absoluteSeedsDirectory)) {
-            $this->command->error('The directory '.$seedsDirectory.' was not found.');
+        if (!File::isDirectory($absoluteSeedsDirectory)) {
+            $this->command->error('The directory ' . $seedsDirectory . ' was not found.');
 
             return false;
         }
-
-        $this->command->line('<info>Directory:</info> '.$seedsDirectory);
+        $this->command->line('<info>Database Connection:</info> ' . DB::connection()->getDatabaseName());
+        $this->command->line('<info>Directory:</info> ' . $seedsDirectory);
 
         $jsonFiles = $this->getJsonFiles($absoluteSeedsDirectory);
 
-        if (! $jsonFiles) {
-            $this->command->warn('The directory '.$seedsDirectory.' has no JSON seeds.');
+        if (!$jsonFiles) {
+            $this->command->warn('The directory ' . $seedsDirectory . ' has no JSON seeds.');
             $this->command->line('You can create seeds from you database by calling <info>php artisan jsonseeds:create</info>');
 
             return false;
         }
 
-        $this->command->line('Found <info>'.count($jsonFiles).' JSON files</info> in <info>'.$seedsDirectory.'</info>');
+        $this->command->line('Found <info>' . count($jsonFiles) . ' JSON files</info> in <info>' . $seedsDirectory . '</info>');
         $this->SeederResultTable = new SeederResultTable();
 
         $this->seed($jsonFiles);
@@ -68,7 +68,7 @@ class JsonDatabaseSeeder extends Seeder
 
     public function seed(array $jsonFiles)
     {
-        if($this->configDisableForeignKeyConstrain) Schema::disableForeignKeyConstraints();
+        if ($this->configDisableForeignKeyConstrain) Schema::disableForeignKeyConstraints();
 
         foreach ($jsonFiles as $jsonFile) {
             $SeederResult = new SeederResult();
@@ -79,9 +79,9 @@ class JsonDatabaseSeeder extends Seeder
             $SeederResult->setFilename($filename);
             $SeederResult->setTable($tableName);
 
-            $this->command->line('Seeding '.$filename);
+            $this->command->line('Seeding ' . $filename);
 
-            if (! Schema::hasTable($tableName)) {
+            if (!Schema::hasTable($tableName)) {
                 $this->outputError(SeederResult::ERROR_NO_TABLE);
 
                 $SeederResult->setStatusAborted();
@@ -92,16 +92,12 @@ class JsonDatabaseSeeder extends Seeder
             }
 
             $SeederResult->setTableStatus(SeederResult::TABLE_STATUS_EXISTS);
-
-            // move this here cause the forEach starts before with the "halaxa/json-machine"
             $tableColumns = DB::getSchemaBuilder()->getColumnListing($tableName);
 
             $filepath = $jsonFile->getRealPath();
             $content = File::get($filepath);
             $fileSize = filesize($filepath);
 
-            // this often causes Allowed Memory Size Exhausted caused by inefficient iteration of big JSON files
-            // $jsonArray = $this->getValidJsonString($content, $SeederResult);
             if (empty($content)) {
                 $this->outputError(SeederResult::ERROR_FILE_EMPTY);
                 $SeederResult->setError(SeederResult::ERROR_FILE_EMPTY);
@@ -110,45 +106,47 @@ class JsonDatabaseSeeder extends Seeder
                 return null;
             }
 
-
-            if (!$this->configUseUpsert) DB::table($tableName)->truncate();
-
-            $bar = $this->command->createProgressBar($fileSize);
-            $bar->start();
+            if (!$this->configUseUpsert) {
+                $this->command->warn('Truncate table "' . $tableName . '".');
+                DB::table($tableName)->truncate();
+            }
 
             // we will use the "halaxa/json-machine" method --> https://github.com/halaxa/json-machine
-            $jsonRows = JsonMachine::fromFile($content, '', new ErrorWrappingDecoder(new ExtJsonDecoder()));
+            $jsonRows = JsonMachine::fromFile($filepath, '', new ErrorWrappingDecoder(new ExtJsonDecoder(true)));
+            $bar = $this->command->getOutput()->createProgressBar(100);
+            $bar->start();
+
             foreach ($jsonRows as $key => $item) {
                 if ($key instanceof DecodingError || $item instanceof DecodingError) {
                     $this->outputError(SeederResult::ERROR_SYNTAX_INVALID);
                     $SeederResult->setError(SeederResult::ERROR_SYNTAX_INVALID);
                     $SeederResult->setStatusAborted();
-
                     return null;
                 }
-                $bar->advance();
-                // $this->outputInfo('Progress : ' . intval($jsonRows->getPosition() / $fileSize * 100) . ' %');
-                $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
-                $data = Arr::only($item, $tableColumns);
 
-                if ($this->configIgnoreEmptyValues) $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
+                $bar->setProgress($jsonRows->getPosition() / $fileSize * 100);
+                
+                if (!empty($item)) {
+                    $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
+                    $data = Arr::only($item, $tableColumns);
+                    if ($this->configIgnoreEmptyValues) $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
 
-                try {
-                    if ($this->configUseUpsert) {
-                        DB::table($tableName)->upsert($data, '');
-                    } else {
-                        DB::table($tableName)->insert($data);
+                    try {
+                        if ($this->configUseUpsert) {
+                            DB::table($tableName)->upsert($data, '');
+                        } else {
+                            DB::table($tableName)->insert($data);
+                        }
+                        $SeederResult->addRow();
+                        $SeederResult->setStatusSucceeded();
+                    } catch (\Exception $e) {
+                        $this->outputError(SeederResult::ERROR_EXCEPTION);
+                        $SeederResult->setError(SeederResult::ERROR_EXCEPTION);
+                        $SeederResult->setStatusAborted();
+                        Log::warning($e->getMessage());
+                        break;
                     }
-                    $SeederResult->addRow();
-                    $SeederResult->setStatusSucceeded();
-                } catch (\Exception $e) {
-                    $this->outputError(SeederResult::ERROR_EXCEPTION);
-                    $SeederResult->setError(SeederResult::ERROR_EXCEPTION);
-                    $SeederResult->setStatusAborted();
-                    Log::warning($e->getMessage());
-                    break;
                 }
-
             }
             $bar->finish();
             $this->outputInfo('Seeding successful!');
@@ -176,28 +174,28 @@ class JsonDatabaseSeeder extends Seeder
         $diff = array_diff($columns, array_keys($item));
 
         if ($diff) {
-            $SeederResult->setError(SeederResult::ERROR_FIELDS_MISSING.' '.implode(',', $diff));
+            $SeederResult->setError(SeederResult::ERROR_FIELDS_MISSING . ' ' . implode(',', $diff));
         }
 
         $diff = array_diff(array_keys($item), $columns);
 
         if ($diff) {
-            $SeederResult->setError(SeederResult::ERROR_FIELDS_UNKNOWN.' '.implode(',', $diff));
+            $SeederResult->setError(SeederResult::ERROR_FIELDS_UNKNOWN . ' ' . implode(',', $diff));
         }
     }
 
     protected function outputInfo(string $message)
     {
-        $this->command->info(' > '.$message);
+        $this->command->info(' > ' . $message);
     }
 
     protected function outputWarning(string $message)
     {
-        $this->command->warn(' > '.$message);
+        $this->command->warn(' > ' . $message);
     }
 
     protected function outputError(string $message)
     {
-        $this->command->error(' > '.$message);
+        $this->command->error(' > ' . $message);
     }
 }
