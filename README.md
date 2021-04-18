@@ -1,4 +1,3 @@
-![Laravel JSON Seeder](https://user-images.githubusercontent.com/65356688/86782944-fe5aa180-c05f-11ea-9267-1581c7f991e1.jpg)
 
 ## INTRO
 
@@ -10,7 +9,26 @@ In this version I changed the call to "json_decode" in the Seeder side with the 
 
 In addition, I added a few more configurations for the seeding procedure. 
 
+# myChangelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+
+## [1.1.1] - 2021-04-16
+### Fixed
+- Improved "Exception -> File Empty" Read content to each file kept causing "Allowed Memory Size Exhausted"
+- Inserted timer calculation for each seeding file 
+
+
+## [1.1] - 2021-04-16
+### First Release
+
+
 ------------------------------------------------------------------------------------------
+![Laravel JSON Seeder](https://user-images.githubusercontent.com/65356688/86782944-fe5aa180-c05f-11ea-9267-1581c7f991e1.jpg)
 
 ## Laravel JSON Seeder
 

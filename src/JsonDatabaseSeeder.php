@@ -73,6 +73,7 @@ class JsonDatabaseSeeder extends Seeder
         foreach ($jsonFiles as $jsonFile) {
             $SeederResult = new SeederResult();
             $this->SeederResultTable->addRow($SeederResult);
+            $startTimer = microtime(true);
 
             $filename = $jsonFile->getFilename();
             $tableName = Str::before($filename, '.json');
@@ -95,16 +96,7 @@ class JsonDatabaseSeeder extends Seeder
             $tableColumns = DB::getSchemaBuilder()->getColumnListing($tableName);
 
             $filepath = $jsonFile->getRealPath();
-            $content = File::get($filepath);
             $fileSize = filesize($filepath);
-
-            if (empty($content)) {
-                $this->outputError(SeederResult::ERROR_FILE_EMPTY);
-                $SeederResult->setError(SeederResult::ERROR_FILE_EMPTY);
-                $SeederResult->setStatusAborted();
-
-                return null;
-            }
 
             if (!$this->configUseUpsert) {
                 $this->command->warn('Truncate table "' . $tableName . '".');
@@ -112,44 +104,56 @@ class JsonDatabaseSeeder extends Seeder
             }
 
             // we will use the "halaxa/json-machine" method --> https://github.com/halaxa/json-machine
-            $jsonRows = JsonMachine::fromFile($filepath, '', new ErrorWrappingDecoder(new ExtJsonDecoder(true)));
-            $bar = $this->command->getOutput()->createProgressBar(100);
-            $bar->start();
+            try {
+                $jsonRows = JsonMachine::fromFile($filepath, '', new ErrorWrappingDecoder(new ExtJsonDecoder(true)));
+                $bar = $this->command->getOutput()->createProgressBar(100);
+                $bar->start();
+                try {
+                    foreach ($jsonRows as $key => $item) {
+                        $bar->setProgress($jsonRows->getPosition() / $fileSize * 100);
 
-            foreach ($jsonRows as $key => $item) {
-                if ($key instanceof DecodingError || $item instanceof DecodingError) {
+                        if (!empty($item)) {
+                            $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
+                            $data = Arr::only($item, $tableColumns);
+                            if ($this->configIgnoreEmptyValues) $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
+
+                            try {
+                                if ($this->configUseUpsert) {
+                                    DB::table($tableName)->upsert($data, '');
+                                } else {
+                                    DB::table($tableName)->insert($data);
+                                }
+                                $SeederResult->addRow();
+                                $SeederResult->setStatusSucceeded();
+                            } catch (\Exception $e) {
+                                $this->outputError(SeederResult::ERROR_EXCEPTION);
+                                $SeederResult->setError(SeederResult::ERROR_EXCEPTION);
+                                $SeederResult->setTableStatus(SeederResult::ERROR_EXCEPTION);
+                                $SeederResult->setStatusAborted();
+                                Log::warning($e->getMessage());
+                                break;
+                            }
+                        }
+                    }
+                    $bar->finish();
+                    $timeElapsedSecs = microtime(true) - $startTimer;
+                    $this->outputInfo('Seeding successful! [in ' . round($timeElapsedSecs, 3) . 'sec]');
+                } catch (DecodingError $e) {
                     $this->outputError(SeederResult::ERROR_SYNTAX_INVALID);
                     $SeederResult->setError(SeederResult::ERROR_SYNTAX_INVALID);
                     $SeederResult->setStatusAborted();
-                    return null;
+                    Log::warning($e->getErrorMessage());
+                    continue;
                 }
-
-                $bar->setProgress($jsonRows->getPosition() / $fileSize * 100);
-                
-                if (!empty($item)) {
-                    $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
-                    $data = Arr::only($item, $tableColumns);
-                    if ($this->configIgnoreEmptyValues) $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
-
-                    try {
-                        if ($this->configUseUpsert) {
-                            DB::table($tableName)->upsert($data, '');
-                        } else {
-                            DB::table($tableName)->insert($data);
-                        }
-                        $SeederResult->addRow();
-                        $SeederResult->setStatusSucceeded();
-                    } catch (\Exception $e) {
-                        $this->outputError(SeederResult::ERROR_EXCEPTION);
-                        $SeederResult->setError(SeederResult::ERROR_EXCEPTION);
-                        $SeederResult->setStatusAborted();
-                        Log::warning($e->getMessage());
-                        break;
-                    }
-                }
+            } catch (\Exception $e) {
+                $this->outputError(SeederResult::ERROR_FILE_EMPTY);
+                $SeederResult->setError(SeederResult::ERROR_FILE_EMPTY);
+                $SeederResult->setTableStatus(SeederResult::ERROR_FILE_EMPTY);
+                $SeederResult->setStatusAborted();
+                Log::warning($e->getMessage());
+                continue;
             }
-            $bar->finish();
-            $this->outputInfo('Seeding successful!');
+            $jsonRows = null;
         }
 
         if ($this->configDisableForeignKeyConstrain) Schema::enableForeignKeyConstraints();
