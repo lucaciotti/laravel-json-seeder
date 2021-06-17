@@ -119,7 +119,7 @@ class JsonDatabaseSeeder extends Seeder
                                 $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
                             } else {
                                 //replace empty array values with null in date type
-                                array_walk($test_array, function (&$value, $key) {
+                                array_walk($data, function (&$value, $key) {
                                     if (stripos($key, 'data') !== false || stripos($key, 'date') !== false) {
                                         $value = NULL;
                                     } else {
