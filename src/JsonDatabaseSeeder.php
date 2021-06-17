@@ -115,7 +115,14 @@ class JsonDatabaseSeeder extends Seeder
                         if (!empty($item)) {
                             $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
                             $data = Arr::only($item, $tableColumns);
-                            if ($this->configIgnoreEmptyValues) $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
+                            if ($this->configIgnoreEmptyValues) {
+                                $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
+                            } else {
+                                //replace empty array values with null
+                                $data = array_map(function ($value) {
+                                    return $value === "" ? NULL : $value;
+                                }, $data); 
+                            }
 
                             try {
                                 if ($this->configUseUpsert) {
