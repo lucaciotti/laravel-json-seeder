@@ -118,10 +118,17 @@ class JsonDatabaseSeeder extends Seeder
                             if ($this->configIgnoreEmptyValues) {
                                 $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
                             } else {
-                                //replace empty array values with null
-                                $data = array_map(function ($value) {
-                                    return $value === "" ? NULL : $value;
-                                }, $data); 
+                                //replace empty array values with null in date type
+                                array_walk($test_array, function (&$value, $key) {
+                                    if (stripos($key, 'data') !== false || stripos($key, 'date') !== false) {
+                                        $value = NULL;
+                                    } else {
+                                        $value = $value;
+                                    }
+                                });
+                                // $data = array_map(function ($value) {
+                                //     return $value === "" ? NULL : $value;
+                                // }, $data);
                             }
 
                             try {
