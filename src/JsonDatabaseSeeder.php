@@ -119,16 +119,15 @@ class JsonDatabaseSeeder extends Seeder
                                 $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
                             } else {
                                 //replace empty array values with null in date type
-                                array_walk($data, function (&$value, $key) {
-                                    if (stripos($key, 'data') !== false || stripos($key, 'date') !==false || stripos($key, 'dt') === 0) {
-                                        $value = $value === "" ? NULL : $value;
-                                    } else {
-                                        $value = $value;
-                                    }
-                                });
-                                // $data = array_map(function ($value) {
-                                //     return $value === "" ? NULL : $value;
-                                // }, $data);
+                                // array_walk($data, function (&$value, $key) {
+                                //     if (stripos($key, 'data') !== false || stripos($key, 'date') !==false || stripos($key, 'dt') === 0) {
+                                //         $value = $value === "" ? NULL : $value;
+                                //     } else {
+                                //         $value = $value;
+                                //     }
+                                // });
+                                //TOLGO LE DATE VUOTE
+                                $data = array_filter($data, fn ($value, $key) => !((stripos($key, 'data') !== false || stripos($key, 'date') !== false || stripos($key, 'dt') === 0) && $value === ''), ARRAY_FILTER_USE_BOTH);
                             }
 
                             try {
