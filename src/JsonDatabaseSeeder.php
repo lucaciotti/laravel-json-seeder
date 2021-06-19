@@ -120,7 +120,7 @@ class JsonDatabaseSeeder extends Seeder
                             } else {
                                 //replace empty array values with null in date type
                                 array_walk($data, function (&$value, $key) {
-                                    if (stripos($key, 'data') !== false || stripos($key, 'date') !==false || stripos($key, 'dt') == 0) {
+                                    if (stripos($key, 'data') !== false || stripos($key, 'date') !==false || stripos($key, 'dt') === 0) {
                                         $value = $value === "" ? NULL : $value;
                                     } else {
                                         $value = $value;
