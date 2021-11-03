@@ -94,6 +94,7 @@ class JsonDatabaseSeeder extends Seeder
 
             $SeederResult->setTableStatus(SeederResult::TABLE_STATUS_EXISTS);
             $tableColumns = DB::getSchemaBuilder()->getColumnListing($tableName);
+            $tablePrimaryColumns = (DB::getDoctrineSchemaManager()->listTableIndexes($tableName))['primary']->getColumns();
 
             $filepath = $jsonFile->getRealPath();
             $fileSize = filesize($filepath);
@@ -108,6 +109,7 @@ class JsonDatabaseSeeder extends Seeder
                 $jsonRows = JsonMachine::fromFile($filepath, '', new ErrorWrappingDecoder(new ExtJsonDecoder(true)));
                 $bar = $this->command->getOutput()->createProgressBar(100);
                 $bar->start();
+                $primaryData = [];
                 try {
                     foreach ($jsonRows as $key => $item) {
                         $bar->setProgress($jsonRows->getPosition() / $fileSize * 100);
@@ -115,6 +117,7 @@ class JsonDatabaseSeeder extends Seeder
                         if (!empty($item)) {
                             $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
                             $data = Arr::only($item, $tableColumns);
+                            array_push($primaryData, Arr::only($item, $tablePrimaryColumns));
                             if ($this->configIgnoreEmptyValues) {
                                 $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
                             } else {
@@ -129,7 +132,6 @@ class JsonDatabaseSeeder extends Seeder
                                 //TOLGO LE DATE VUOTE
                                 $data = array_filter($data, fn ($value, $key) => !((stripos($key, 'data') !== false || stripos($key, 'date') !== false || stripos($key, 'dt') === 0) && $value === ''), ARRAY_FILTER_USE_BOTH);
                             }
-
                             try {
                                 if ($this->configUseUpsert) {
                                     DB::table($tableName)->upsert($data, '');
@@ -151,6 +153,23 @@ class JsonDatabaseSeeder extends Seeder
                     $bar->finish();
                     $timeElapsedSecs = microtime(true) - $startTimer;
                     $this->outputInfo('Seeding successful! [in ' . round($timeElapsedSecs, 3) . 'sec]');
+                    try {
+                        if ($this->configUseUpsert && count($tablePrimaryColumns)==1) {
+                            $primaryColName= head($tablePrimaryColumns);
+                            $primaryData = Arr::pluck($primaryData, $primaryColName);
+                            $primaryData = Arr::sort($primaryData);
+                            $firstValue = head($primaryData);
+                            DB::table($tableName)->whereNotIn($primaryColName, $primaryData)->where($primaryColName, '>', $firstValue)->delete();
+                            $this->outputInfo('Deleted unnecessary old-lines!');
+                        }
+                    } catch (\Exception $e) {
+                        $this->outputError(SeederResult::ERROR_EXCEPTION);
+                        $SeederResult->setError(SeederResult::ERROR_EXCEPTION);
+                        $SeederResult->setTableStatus(SeederResult::ERROR_EXCEPTION);
+                        $SeederResult->setStatusAborted();
+                        Log::warning($e->getMessage());
+                        break;
+                    }
                 } catch (DecodingError $e) {
                     $this->outputError(SeederResult::ERROR_SYNTAX_INVALID);
                     $SeederResult->setError(SeederResult::ERROR_SYNTAX_INVALID);
