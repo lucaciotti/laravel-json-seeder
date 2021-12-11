@@ -159,9 +159,14 @@ class JsonDatabaseSeeder extends Seeder
                             $primaryColName= head($tablePrimaryColumns);
                             $primaryData = Arr::pluck($primaryData, $primaryColName);
                             $primaryData = Arr::sort($primaryData);
-                            $firstValue = head($primaryData);
                             foreach (array_chunk($primaryData, 1000) as $dataChuck) {
-                                DB::table($tableName)->whereNotIn($primaryColName, $dataChuck)->where($primaryColName, '>', $firstValue)->delete();
+                                $firstValue = head($dataChuck);
+                                $lastValue = last($dataChuck);
+                                DB::table($tableName)
+                                    ->whereNotIn($primaryColName, $dataChuck)
+                                    ->where($primaryColName, '>=', $firstValue)
+                                    ->where($primaryColName, '<=', $lastValue)
+                                    ->delete();
                             }
                             $this->outputInfo('==> Deleted unnecessary old-lines!');
                         }
