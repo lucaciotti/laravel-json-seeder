@@ -117,7 +117,6 @@ class JsonDatabaseSeeder extends Seeder
                         if (!empty($item)) {
                             $this->compareJsonWithTableColumns($item, $tableColumns, $SeederResult);
                             $data = Arr::only($item, $tableColumns);
-                            array_push($primaryData, Arr::only($item, $tablePrimaryColumns));
                             if ($this->configIgnoreEmptyValues) {
                                 $data = array_filter($data, fn ($value) => !is_null($value) && $value !== '');
                             } else {
@@ -135,6 +134,8 @@ class JsonDatabaseSeeder extends Seeder
                             try {
                                 if ($this->configUseUpsert) {
                                     DB::table($tableName)->upsert($data, '');
+                                    //If Upsert goes right --> update array in order to clean old values in next step 
+                                    array_push($primaryData, Arr::only($data, $tablePrimaryColumns));
                                 } else {
                                     DB::table($tableName)->insert($data);
                                 }
@@ -159,8 +160,10 @@ class JsonDatabaseSeeder extends Seeder
                             $primaryData = Arr::pluck($primaryData, $primaryColName);
                             $primaryData = Arr::sort($primaryData);
                             $firstValue = head($primaryData);
-                            DB::table($tableName)->whereNotIn($primaryColName, $primaryData)->where($primaryColName, '>', $firstValue)->delete();
-                            $this->outputInfo('Deleted unnecessary old-lines!');
+                            foreach (array_chunk($primaryData, 1000) as $dataChuck) {
+                                DB::table($tableName)->whereNotIn($primaryColName, $dataChuck)->where($primaryColName, '>', $firstValue)->delete();
+                            }
+                            $this->outputInfo('==> Deleted unnecessary old-lines!');
                         }
                     } catch (\Exception $e) {
                         $this->outputError(SeederResult::ERROR_EXCEPTION);
